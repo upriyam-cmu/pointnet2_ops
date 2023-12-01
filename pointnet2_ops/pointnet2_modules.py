@@ -20,11 +20,12 @@ def build_shared_mlp(mlp_spec: List[int], bn: bool = True):
 
 
 class _PointnetSAModuleBase(nn.Module):
-    def __init__(self):
+    def __init__(self, nsamples):
         super(_PointnetSAModuleBase, self).__init__()
         self.npoint = None
         self.groupers = None
         self.mlps = None
+        self.nsamples = nsamples
 
     def forward(
         self, xyz: torch.Tensor, features: Optional[torch.Tensor]
@@ -64,11 +65,11 @@ class _PointnetSAModuleBase(nn.Module):
             )  # (B, C, npoint, nsample)
 
             new_features = self.mlps[i](new_features)  # (B, mlp[-1], npoint, nsample)
+            nsample = self.nsamples[i] if self.nsamples[i] else 64
             new_features = F.max_pool2d(
-                new_features, kernel_size=[1, new_features.size(3)]
-            )  # (B, mlp[-1], npoint, 1)
+                new_features, kernel_size=(1, nsample)
+            ) # (B, mlp[-1], npoint, 1)
             new_features = new_features.squeeze(-1)  # (B, mlp[-1], npoint)
-
             new_features_list.append(new_features)
 
         return new_xyz, torch.cat(new_features_list, dim=1)
@@ -93,7 +94,7 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
 
     def __init__(self, npoint, radii, nsamples, mlps, bn=True, use_xyz=True):
         # type: (PointnetSAModuleMSG, int, List[float], List[int], List[List[int]], bool, bool) -> None
-        super(PointnetSAModuleMSG, self).__init__()
+        super(PointnetSAModuleMSG, self).__init__(nsamples)
 
         assert len(radii) == len(nsamples) == len(mlps)
 
